@@ -1,78 +1,135 @@
-/*
- * main.c
- *
- * TCP Server - Template for Computer Networks assignment
- *
- * This file contains the boilerplate code for a TCP server
- * portable across Windows, Linux and macOS.
- */
-
-#if defined WIN32
-#include <winsock.h>
-#else
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+
+#if defined(_WIN32)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+typedef int socklen_t;
+#define strcasecmp _stricmp
+#else
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
-#include <netdb.h>
+#include <arpa/inet.h>
+#include <strings.h>
 #define closesocket close
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
 #include "protocol.h"
 
-#define NO_ERROR 0
+// --- Funzioni di generazione valori casuali ---
+float get_temperature(void) { return -10.0f + (rand() % 500) / 10.0f; }
+float get_humidity(void)    { return 20.0f  + (rand() % 801) / 10.0f; }
+float get_wind(void)        { return (rand() % 1001) / 10.0f; }
+float get_pressure(void)    { return 950.0f + (rand() % 1001) / 10.0f; }
 
-void clearwinsock() {
-#if defined WIN32
-	WSACleanup();
-#endif
+// --- Lista città supportate ---
+const char* cities[] = {
+    "bari","roma","milano","napoli","torino",
+    "palermo","genova","bologna","firenze","venezia"
+};
+
+int is_supported_city(const char* city) {
+    for (int i = 0; i < 10; i++)
+        if (strcasecmp(city, cities[i]) == 0)
+            return 1;
+    return 0;
 }
 
-int main(int argc, char *argv[]) {
+// ----------------------------------------------
+//                MAIN SERVER
+// ----------------------------------------------
+int main() {
 
-	// TODO: Implement server logic
-
-#if defined WIN32
-	// Initialize Winsock
-	WSADATA wsa_data;
-	int result = WSAStartup(MAKEWORD(2,2), &wsa_data);
-	if (result != NO_ERROR) {
-		printf("Error at WSAStartup()\n");
-		return 0;
-	}
+#if defined(_WIN32)
+    WSADATA wsa_data;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
+        printf("Errore WSAStartup()\n");
+        return -1;
+    }
 #endif
 
-	int my_socket;
+    srand((unsigned int)time(NULL));
 
-	// TODO: Create socket
-	// my_socket = socket(...);
+    printf("=== SERVER METEO TCP ===\n");
+    printf("Porta in ascolto: %d\n", SERVER_PORT);
 
-	// TODO: Configure server address
-	// struct sockaddr_in server_addr;
-	// server_addr.sin_family = AF_INET;
-	// server_addr.sin_port = htons(SERVER_PORT);
-	// server_addr.sin_addr.s_addr = INADDR_ANY;
+    int s_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s_socket < 0) {
+        perror("socket");
+        return -1;
+    }
 
-	// TODO: Bind socket
-	// bind(...);
+    struct sockaddr_in sad;
+    memset(&sad, 0, sizeof(sad));
+    sad.sin_family = AF_INET;
+    sad.sin_addr.s_addr = INADDR_ANY;
+    sad.sin_port = htons(SERVER_PORT);
 
-	// TODO: Set socket to listen
-	// listen(...);
+    if (bind(s_socket, (struct sockaddr*)&sad, sizeof(sad)) < 0) {
+        perror("bind");
+        return -1;
+    }
 
-	// TODO: Implement connection acceptance loop
-	// while (1) {
-	//     int client_socket = accept(...);
-	//     // Handle client communication
-	//     closesocket(client_socket);
-	// }
+    if (listen(s_socket, 10) < 0) {
+        perror("listen");
+        return -1;
+    }
 
-	printf("Server terminated.\n");
+    printf("Server avviato! In attesa di connessioni...\n\n");
 
-	closesocket(my_socket);
-	clearwinsock();
-	return 0;
-} // main end
+    while (1) {
+
+        struct sockaddr_in cad;
+        socklen_t cad_len = sizeof(cad);
+
+        int c_socket = accept(s_socket, (struct sockaddr*)&cad, &cad_len);
+        if (c_socket < 0) continue;
+
+        weather_request_t req;
+        if (recv(c_socket, (char*)&req, sizeof(req), 0) <= 0) {
+            closesocket(c_socket);
+            continue;
+        }
+
+        printf("[CLIENT %s] Richiesta: '%c %s'\n",
+               inet_ntoa(cad.sin_addr), req.type, req.city);
+
+        weather_response_t resp;
+        memset(&resp, 0, sizeof(resp));
+
+        // Validazione della richiesta
+        if (req.type != TYPE_TEMPERATURE &&
+            req.type != TYPE_HUMIDITY &&
+            req.type != TYPE_WIND &&
+            req.type != TYPE_PRESSURE) {
+
+            resp.status = STATUS_INVALID_REQUEST;
+        }
+        else if (!is_supported_city(req.city)) {
+            resp.status = STATUS_CITY_UNAVAILABLE;
+        }
+        else {
+            resp.status = STATUS_SUCCESS;
+            resp.type = req.type;
+
+            switch (req.type) {
+                case TYPE_TEMPERATURE: resp.value = get_temperature(); break;
+                case TYPE_HUMIDITY:    resp.value = get_humidity();    break;
+                case TYPE_WIND:        resp.value = get_wind();        break;
+                case TYPE_PRESSURE:    resp.value = get_pressure();    break;
+            }
+        }
+
+        send(c_socket, (char*)&resp, sizeof(resp), 0);
+        closesocket(c_socket);
+    }
+
+#if defined(_WIN32)
+    WSACleanup();
+#endif
+
+    return 0;
+}
