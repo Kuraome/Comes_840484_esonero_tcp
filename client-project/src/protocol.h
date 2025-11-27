@@ -22,7 +22,7 @@ typedef struct {
 } weather_request_t;
 
 typedef struct {
-    char status;
+	unsigned int status;
     char type;
     float value;
 } weather_response_t;
