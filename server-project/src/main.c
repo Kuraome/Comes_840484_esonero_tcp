@@ -70,7 +70,7 @@ int main() {
     struct sockaddr_in sad;
     memset(&sad, 0, sizeof(sad));
     sad.sin_family = AF_INET;
-    sad.sin_addr.s_addr =inet_addr(DEFAULT_IP);
+    sad.sin_addr.s_addr = htonl(INADDR_ANY);
     sad.sin_port = htons(SERVER_PORT);
 
     if (bind(s_socket, (struct sockaddr*)&sad, sizeof(sad)) < 0) {
