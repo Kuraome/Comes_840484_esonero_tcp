@@ -101,6 +101,7 @@ int main() {
 
         weather_response_t resp;
         memset(&resp, 0, sizeof(resp));
+        req.type=tolower(req.type);
 
         // Validazione della richiesta
         if (req.type != TYPE_TEMPERATURE &&
