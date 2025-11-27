@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <ctype.h>
 
 #if defined(_WIN32)
@@ -16,6 +17,7 @@ typedef int socklen_t;
 #include <strings.h>
 #define closesocket close
 #endif
+#define QUEUE_SIZE 6
 
 #include "protocol.h"
 
@@ -32,10 +34,16 @@ const char* cities[] = {
 };
 
 int is_supported_city(const char* city) {
+
     for (int i = 0; i < 10; i++)
         if (strcasecmp(city, cities[i]) == 0)
             return 1;
     return 0;
+}
+
+void errorhandler(char *errorMessage)
+{
+    printf("%s", errorMessage);
 }
 
 // ----------------------------------------------
@@ -51,34 +59,29 @@ int main() {
     }
 #endif
 
-    srand((unsigned int)time(NULL));
-
-    printf("=== SERVER METEO TCP ===\n");
-    printf("Porta in ascolto: %d\n", SERVER_PORT);
+    srand(time(NULL));
 
     int s_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s_socket < 0) {
-        perror("socket");
+        errorhandler("socket");
         return -1;
     }
 
     struct sockaddr_in sad;
     memset(&sad, 0, sizeof(sad));
     sad.sin_family = AF_INET;
-    sad.sin_addr.s_addr = INADDR_ANY;
+    sad.sin_addr.s_addr =inet_addr(DEFAULT_IP);
     sad.sin_port = htons(SERVER_PORT);
 
     if (bind(s_socket, (struct sockaddr*)&sad, sizeof(sad)) < 0) {
-        perror("bind");
+        errorhandler("bind");
         return -1;
     }
 
-    if (listen(s_socket, 10) < 0) {
-        perror("listen");
+    if (listen(s_socket, QUEUE_SIZE) < 0) {
+    	errorhandler("listen");
         return -1;
     }
-
-    printf("Server avviato! In attesa di connessioni...\n\n");
 
     while (1) {
 
@@ -94,8 +97,7 @@ int main() {
             continue;
         }
 
-        printf("[CLIENT %s] Richiesta: '%c %s'\n",
-               inet_ntoa(cad.sin_addr), req.type, req.city);
+        printf("Richiesta %c %s dal client ip %s\n",req.type,req.city, inet_ntoa(cad.sin_addr));
 
         weather_response_t resp;
         memset(&resp, 0, sizeof(resp));
@@ -107,9 +109,13 @@ int main() {
             req.type != TYPE_PRESSURE) {
 
             resp.status = STATUS_INVALID_REQUEST;
+            resp.type = '\0';
+            resp.value = 0.0f;
         }
         else if (!is_supported_city(req.city)) {
             resp.status = STATUS_CITY_UNAVAILABLE;
+            resp.type = '\0';
+            resp.value = 0.0f;
         }
         else {
             resp.status = STATUS_SUCCESS;

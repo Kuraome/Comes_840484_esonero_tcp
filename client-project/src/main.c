@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #if defined WIN32
 #include <winsock2.h>
@@ -30,6 +31,11 @@ void clearwinsock() {
 #endif
 }
 
+void errorhandler(char *errorMessage)
+{
+    printf("%s", errorMessage);
+}
+
 int main(int argc, char* argv[]) {
 
 #if defined(_WIN32)
@@ -41,7 +47,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     int port = SERVER_PORT;
-    char ip[32] = DEFAULT_IP;
+    char ip[32] = "127.0.0.1";
     char request_string[128] = "";
     int richiesta = 0;
 
@@ -95,7 +101,7 @@ int main(int argc, char* argv[]) {
     int c_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
     if (c_socket < 0) {
-        perror("socket");
+    	errorhandler("socket");
         clearwinsock();
         return -1;
     }
@@ -109,7 +115,7 @@ int main(int argc, char* argv[]) {
 
     // --- Connessione ---
     if (connect(c_socket, (struct sockaddr*)&sad, sizeof(sad)) < 0) {
-        perror("connect");
+        errorhandler("connect");
         closesocket(c_socket);
         clearwinsock();
         return -1;
@@ -117,7 +123,7 @@ int main(int argc, char* argv[]) {
 
     // --- Invio richiesta ---
     if (send(c_socket, (char*)&req, sizeof(req), 0) < 0) {
-        perror("send");
+    	errorhandler("send");
         closesocket(c_socket);
         clearwinsock();
         return -1;
@@ -126,14 +132,11 @@ int main(int argc, char* argv[]) {
     // --- Ricezione risposta ---
     weather_response_t resp;
     if (recv(c_socket, (char*)&resp, sizeof(resp), 0) <= 0) {
-        perror("recv");
+    	errorhandler("recv");
         closesocket(c_socket);
         clearwinsock();
         return -1;
     }
-
-    // --- Elaborazione risposta ---
-    printf("Risposta dal server (%s): ", ip);
 
     if (resp.status == STATUS_SUCCESS) {
 
@@ -142,31 +145,29 @@ int main(int argc, char* argv[]) {
         switch (resp.type) {
 
             case TYPE_TEMPERATURE:
-                printf("%s: Temperatura = %.1f°C\n", req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Temperatura = %.1f%cC\n", ip, req.city, resp.value,248);
                 break;
 
             case TYPE_HUMIDITY:
-                printf("%s: Umidità = %.1f%%\n", req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Umidita' = %.1f%%\n", ip, req.city, resp.value);
                 break;
 
             case TYPE_WIND:
-                printf("%s: Vento = %.1f km/h\n", req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Vento = %.1f km/h\n",ip ,req.city, resp.value);
                 break;
 
             case TYPE_PRESSURE:
-                printf("%s: Pressione = %.1f hPa\n", req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Pressione = %.1f hPa\n", ip, req.city, resp.value);
                 break;
         }
     }
     else if (resp.status == STATUS_CITY_UNAVAILABLE) {
-        printf("Città non disponibile\n");
-    }
-    else if (resp.status == STATUS_INVALID_REQUEST) {
-        printf("Richiesta non valida\n");
+        printf("Ricevuto risultato dal server ip %s. Citta' non disponibile\n", ip);
     }
     else {
-        printf("Errore sconosciuto\n");
+        printf("Ricevuto risultato dal server ip %s. Richiesta non valida\n", ip);
     }
+
 
     closesocket(c_socket);
     clearwinsock();
