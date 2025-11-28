@@ -2,7 +2,9 @@
 #define PROTOCOL_H
 
 #define SERVER_PORT 56700
+#define BUFFER_SIZE 512
 #define DEFAULT_IP "127.0.0.1"
+#define QUEUE_SIZE 5
 
 // Tipi di richiesta
 #define TYPE_TEMPERATURE 't'
@@ -30,5 +32,12 @@ typedef struct {
 
 
 void errorhandler(char *errorMessage);
+void clearwinsock();
 
+//prototipi
+
+float get_temperature(void);//temperatura
+float get_humidity(void); //umidita
+float get_wind(void); //vento
+float get_pressure(void);//pressione
 #endif

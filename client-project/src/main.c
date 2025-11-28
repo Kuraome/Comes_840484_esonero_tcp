@@ -25,6 +25,7 @@
 
 #include "protocol.h"
 
+//cleanup per winsock
 void clearwinsock() {
 #if defined(_WIN32)
     WSACleanup();
@@ -37,7 +38,7 @@ void errorhandler(char *errorMessage)
 }
 
 int main(int argc, char* argv[]) {
-
+//inizializzazione winsock
 #if defined(_WIN32)
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2,2), &wsa_data) != 0) {
@@ -47,9 +48,13 @@ int main(int argc, char* argv[]) {
 #endif
 
     int port = SERVER_PORT;
-    char ip[32] = "127.0.0.1";
+    char ip[32] = DEFAULT_IP;
     char request_string[128] = "";
     int richiesta = 0;
+
+    // struttura da inviare al server
+    weather_request_t request;
+    memset(&request, 0, sizeof(request));
 
     // --- Parsing degli argomenti ---
     for (int i = 1; i < argc; i++) {
@@ -71,39 +76,27 @@ int main(int argc, char* argv[]) {
     }
 
     if (!richiesta) {
-        printf("Uso: %s [-s server] [-p port] -r \"tipo citta'\"\n", argv[0]);
-        clearwinsock();
-        return -1;
-    }
+    	 printf("Uso: %s [-s server] [-p port] -r \"tipo città\"\n", argv[0]);
+    	        clearwinsock();
+            return -1;
+        }
 
-    // --- Costruzione della struttura richiesta ---
-    weather_request_t req;
-    memset(&req, 0, sizeof(req));
-
+    //parsing della stringa richiesta
     int i = 0;
+    while (request_string[i]== ' ' &&request_string[i] != '\0')i++;
 
-    // Skip spazi iniziali
-    while (request_string[i] == ' ' && request_string[i] != '\0')
-        i++;
+    request.type = request_string[i];
+    i++;
 
-    // Tipo (T, H, W, P)
-    req.type = request_string[i++];
+    while (request_string[i]== ' ' &&request_string[i] != '\0')i++;
+    strncpy (request.city, &request_string[i], 63);
+    request.city[63] = '\0';
 
-    // Skip spazi dopo il tipo
-    while (request_string[i] == ' ' && request_string[i] != '\0')
-        i++;
-
-    // Nome città
-    strncpy(req.city, &request_string[i], 63);
-    req.city[63] = '\0';
-
-    // --- Creazione socket ---
-    int c_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-    if (c_socket < 0) {
-    	errorhandler("socket");
-        clearwinsock();
-        return -1;
+    int c_socket =socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(c_socket < 0){
+    	errorhandler ("Creazione del socket fallita.\n");
+    	clearwinsock();
+    	return -1;
     }
 
     struct sockaddr_in sad;
@@ -122,7 +115,7 @@ int main(int argc, char* argv[]) {
     }
 
     // --- Invio richiesta ---
-    if (send(c_socket, (char*)&req, sizeof(req), 0) < 0) {
+    if (send(c_socket, (char*)&request, sizeof(request), 0) < 0) {
     	errorhandler("send");
         closesocket(c_socket);
         clearwinsock();
@@ -130,45 +123,46 @@ int main(int argc, char* argv[]) {
     }
 
     // --- Ricezione risposta ---
-    weather_response_t resp;
-    if (recv(c_socket, (char*)&resp, sizeof(resp), 0) <= 0) {
-    	errorhandler("recv");
+    weather_response_t response;
+    if (recv(c_socket, (char*)&response, sizeof(response), 0) <= 0) {
+    	errorhandler("recv() fallita o connessione chiusa prematuratamente");
         closesocket(c_socket);
         clearwinsock();
         return -1;
     }
 
-    if (resp.status == STATUS_SUCCESS) {
+    if (response.status == STATUS_SUCCESS) {
 
-        req.city[0] = (char)toupper((unsigned char)req.city[0]);
+        request.city[0] = (char)toupper((unsigned char)request.city[0]);
 
-        switch (resp.type) {
+        switch (response.type) {
 
             case TYPE_TEMPERATURE:
-                printf("Ricevuto risultato dal server ip %s. %s: Temperatura = %.1f%cC\n", ip, req.city, resp.value,248);
+                printf("Ricevuto risultato dal server ip %s. %s: Temperatura = %.1f%cC\n", ip, request.city, response.value,248);
                 break;
 
             case TYPE_HUMIDITY:
-                printf("Ricevuto risultato dal server ip %s. %s: Umidita' = %.1f%%\n", ip, req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Umidita' = %.1f%%\n", ip, request.city, response.value);
                 break;
 
             case TYPE_WIND:
-                printf("Ricevuto risultato dal server ip %s. %s: Vento = %.1f km/h\n",ip ,req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Vento = %.1f km/h\n",ip ,request.city, response.value);
                 break;
 
             case TYPE_PRESSURE:
-                printf("Ricevuto risultato dal server ip %s. %s: Pressione = %.1f hPa\n", ip, req.city, resp.value);
+                printf("Ricevuto risultato dal server ip %s. %s: Pressione = %.1f hPa\n", ip, request.city, response.value);
                 break;
         }
     }
-    else if (resp.status == STATUS_CITY_UNAVAILABLE) {
+    else if (response.status == STATUS_CITY_UNAVAILABLE) {
         printf("Ricevuto risultato dal server ip %s. Citta' non disponibile\n", ip);
-    }
-    else {
+    } else if (response.status == STATUS_INVALID_REQUEST) {
         printf("Ricevuto risultato dal server ip %s. Richiesta non valida\n", ip);
+    } else {
+    	printf("Errore sconosciuto\n");
     }
 
-
+//chiusura
     closesocket(c_socket);
     clearwinsock();
     return 0;

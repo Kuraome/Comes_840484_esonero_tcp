@@ -3,6 +3,8 @@
 
 #define SERVER_PORT 56700
 #define DEFAULT_IP "127.0.0.1"
+#define BUFFER_SIZE 512
+#define QUEUE_SIZE 5
 
 // Tipi di richiesta
 #define TYPE_TEMPERATURE 't'
@@ -28,6 +30,7 @@ typedef struct {
 } weather_response_t;
 
 // Prototipi
+float random_float(float,float);
 float get_temperature(void);
 float get_humidity(void);
 float get_wind(void);
